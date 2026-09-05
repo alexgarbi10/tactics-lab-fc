@@ -1,13 +1,11 @@
 # Tactics Lab FC
 
-## Project Overview
+Football tactics board: drag-and-drop formations, real club squads from API-Football, per-slot roles, a substitutes bench, and save/load to MongoDB.
 
-Tactics Lab FC is a football/soccer tactics board. Build formations with a visual drag-and-drop editor, load real squads from API-Football, assign players to positions, set tactical roles per slot, and manage substitutes — then save and reload your setups.
-
-- **Client**: React 19 + Vite + TypeScript + Tailwind CSS
-- **Server**: Fastify + MongoDB (Mongoose) + TypeScript + Inversify for DI
-- **Player data**: [API-Football](https://api-football.com) via RapidAPI (real squads and player info)
-- **Database**: MongoDB (default: `mongodb://localhost:27017/tactics-lab-fc`) — used to persist saved formations only
+- **Client:** React 19, Vite, TypeScript, Tailwind CSS
+- **Server:** Fastify, MongoDB (Mongoose), TypeScript, Inversify
+- **Player data:** [API-Football](https://api-football.com) via RapidAPI
+- **Persistence:** MongoDB (`mongodb://localhost:27017/tactics-lab-fc` by default) for saved formations only
 
 ## Setup
 
@@ -25,19 +23,19 @@ MONGO_URI=mongodb://localhost:27017/tactics-lab-fc   # optional
 ### 2. Install & run
 
 ```bash
-npm install         # install all workspace dependencies
-npm run dev         # run client (port 5173) + server (port 3000) concurrently
+pnpm install        # install all workspace dependencies
+pnpm dev            # run client (port 5173) + server (port 3000) concurrently
 ```
 
 ## Common Commands
 
 ```bash
-npm run dev              # Run both client and server concurrently
-npm run dev:client       # Run client only (port 5173)
-npm run dev:server       # Run server only (port 3000)
-npm run test             # Run server tests
-npm run test:client      # Run client tests
-npm run build            # Build client for production
+pnpm dev                 # Run both client and server concurrently
+pnpm dev:client          # Run client only (port 5173)
+pnpm dev:server          # Run server only (port 3000)
+pnpm test                # Run server tests
+pnpm test:client         # Run client tests
+pnpm build               # Build client for production
 ```
 
 ## Architecture
