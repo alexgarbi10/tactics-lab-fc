@@ -61,14 +61,13 @@ client/src/
 
 ## Formation Editor Features
 
-- **8 preset formations**: 4-3-3, 4-4-2, 4-2-3-1, 3-5-2, 3-4-3, 5-3-2, 4-1-4-1, 4-3-2-1
+- **10 preset formations**: 4-3-3, 4-4-2, 4-2-3-1, 3-5-2, 3-4-3, 5-3-2, 4-1-4-1, 4-3-2-1, 4-5-1, 3-6-1
 - **Squad search**: Search any club by name via API-Football; loads the full registered squad
 - **Player assignment**: Drag players from the squad panel onto pitch slots, or click-to-select then click a slot
 - **Shirt numbers & names**: Each occupied node shows the player's surname, shirt number badge, and role
 - **Role popover**: Click any slot to open a popover and assign a tactical role (e.g. Box-to-Box, Inside Forward, Sweeper-Keeper) — roles are position-specific
 - **Substitutes bench**: Up to 9 bench players with drag-and-drop; drag bench players onto the pitch to swap
 - **Drag to reposition**: All pitch nodes are freely draggable to fine-tune player positioning
-- **Tactic notes**: Free-text field for tactical instructions saved with each formation
 - **Save / load / delete**: Formations (including all player assignments, roles, and subs) are persisted to MongoDB
 
 ## API Endpoints
