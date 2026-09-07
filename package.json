@@ -8,12 +8,15 @@
     "onlyBuiltDependencies": ["esbuild"]
   },
   "scripts": {
-    "dev": "concurrently \"pnpm dev:server\" \"pnpm dev:client\"",
+    "dev": "pnpm --filter client dev",
+    "dev:full": "concurrently \"pnpm dev:server\" \"pnpm dev:client\"",
     "dev:server": "pnpm --filter server dev",
     "dev:client": "pnpm --filter client dev",
-    "test": "pnpm --filter server test",
-    "test:client": "pnpm --filter client test",
-    "build": "pnpm --filter client build"
+    "test": "pnpm --filter client test",
+    "test:server": "pnpm --filter server test",
+    "build": "pnpm --filter client build",
+    "build:client": "pnpm --filter client build",
+    "build:server": "pnpm --filter server build"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

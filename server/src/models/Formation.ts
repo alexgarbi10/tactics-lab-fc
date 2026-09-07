@@ -16,6 +16,16 @@ export interface PlayerPosition {
   player?: AssignedPlayer;
 }
 
+export interface FormationRecord {
+  _id: string;
+  name: string;
+  shape: string;
+  positions: PlayerPosition[];
+  substitutes: AssignedPlayer[];
+  teamName?: string;
+  createdAt: Date;
+}
+
 export interface Formation extends Document {
   name: string;
   shape: string;
@@ -50,3 +60,16 @@ const FormationSchema = new Schema<Formation>({
 });
 
 export const FormationModel = mongoose.model<Formation>('Formation', FormationSchema);
+
+export function toFormationRecord(doc: Formation): FormationRecord {
+  const o = doc.toObject();
+  return {
+    _id: String(o._id),
+    name: o.name,
+    shape: o.shape,
+    positions: o.positions,
+    substitutes: o.substitutes,
+    teamName: o.teamName,
+    createdAt: o.createdAt,
+  };
+}

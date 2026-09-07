@@ -1,4 +1,5 @@
 import { FastifyInstance } from 'fastify';
+import { DEMO_SQUAD, DEMO_TEAM } from '../fixtures/demoSquad.js';
 
 const API_FOOTBALL_BASE = 'https://api-football-v1.p.rapidapi.com/v3';
 
@@ -25,13 +26,17 @@ async function apiFetch(path: string): Promise<Record<string, unknown>> {
 export async function apiFootballRoutes(fastify: FastifyInstance) {
   /**
    * GET /api/search/teams?name=Barcelona
-   * Search real teams by name via API-Football.
+   * Search real teams by name via API-Football. Without a key, returns Demo FC.
    */
   fastify.get('/teams', async (request, reply) => {
     const { name } = request.query as { name?: string };
 
     if (!name?.trim()) {
       return reply.status(400).send({ error: 'Provide a "name" query parameter' });
+    }
+
+    if (!process.env.RAPIDAPI_KEY) {
+      return [DEMO_TEAM];
     }
 
     try {
@@ -57,13 +62,17 @@ export async function apiFootballRoutes(fastify: FastifyInstance) {
 
   /**
    * GET /api/search/squad?teamId=529
-   * Load the registered squad for a team.
+   * Load the registered squad for a team. Demo FC uses a local fixture.
    */
   fastify.get('/squad', async (request, reply) => {
     const { teamId } = request.query as { teamId?: string };
 
     if (!teamId) {
       return reply.status(400).send({ error: 'Provide a "teamId" query parameter' });
+    }
+
+    if (!process.env.RAPIDAPI_KEY || teamId === String(DEMO_TEAM.id)) {
+      return DEMO_SQUAD;
     }
 
     try {

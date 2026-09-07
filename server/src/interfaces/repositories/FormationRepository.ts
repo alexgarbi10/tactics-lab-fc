@@ -1,9 +1,9 @@
-import { Formation } from '../../models/Formation.js';
+import { FormationRecord } from '../../models/Formation.js';
 
 export interface FormationRepository {
-  findAll(): Promise<Formation[]>;
-  findById(id: string): Promise<Formation | null>;
-  create(formation: Partial<Formation>): Promise<Formation>;
-  update(id: string, formation: Partial<Formation>): Promise<Formation | null>;
+  findAll(): Promise<FormationRecord[]>;
+  findById(id: string): Promise<FormationRecord | null>;
+  create(formation: Partial<FormationRecord>): Promise<FormationRecord>;
+  update(id: string, formation: Partial<FormationRecord>): Promise<FormationRecord | null>;
   delete(id: string): Promise<boolean>;
 }

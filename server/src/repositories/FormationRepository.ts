@@ -1,23 +1,27 @@
 import { injectable } from 'inversify';
-import { FormationModel, Formation } from '../models/Formation.js';
+import { FormationModel, FormationRecord, toFormationRecord } from '../models/Formation.js';
 import { FormationRepository } from '../interfaces/repositories/FormationRepository.js';
 
 @injectable()
 export class FormationRepositoryAdapter implements FormationRepository {
-  async findAll(): Promise<Formation[]> {
-    return FormationModel.find().sort({ createdAt: -1 }).exec();
+  async findAll(): Promise<FormationRecord[]> {
+    const docs = await FormationModel.find().sort({ createdAt: -1 }).exec();
+    return docs.map(toFormationRecord);
   }
 
-  async findById(id: string): Promise<Formation | null> {
-    return FormationModel.findById(id).exec();
+  async findById(id: string): Promise<FormationRecord | null> {
+    const doc = await FormationModel.findById(id).exec();
+    return doc ? toFormationRecord(doc) : null;
   }
 
-  async create(formation: Partial<Formation>): Promise<Formation> {
-    return FormationModel.create(formation);
+  async create(formation: Partial<FormationRecord>): Promise<FormationRecord> {
+    const doc = await FormationModel.create(formation);
+    return toFormationRecord(doc);
   }
 
-  async update(id: string, formation: Partial<Formation>): Promise<Formation | null> {
-    return FormationModel.findByIdAndUpdate(id, formation, { new: true }).exec();
+  async update(id: string, formation: Partial<FormationRecord>): Promise<FormationRecord | null> {
+    const doc = await FormationModel.findByIdAndUpdate(id, formation, { new: true }).exec();
+    return doc ? toFormationRecord(doc) : null;
   }
 
   async delete(id: string): Promise<boolean> {

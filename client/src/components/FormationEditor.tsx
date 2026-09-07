@@ -1,5 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { ROLES, PositionName } from '../types/roles';
+import { parseShirtNumber, shirtLabel } from '../shirtNumber';
+import { DEMO_SQUAD, DEMO_TEAM } from '../data/demoSquad';
+import {
+  listFormations,
+  createFormation,
+  updateFormation,
+  deleteFormation,
+} from '../storage/formations';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -217,10 +225,11 @@ function PitchMarkings() {
 // ─── Role Popover ─────────────────────────────────────────────────────────────
 
 function RolePopover({
-  slot, onRoleChange, onRemove, onClose,
+  slot, onRoleChange, onShirtChange, onRemove, onClose,
 }: {
   slot: PitchSlot;
   onRoleChange: (r: string) => void;
+  onShirtChange: (n: number | undefined) => void;
   onRemove: () => void;
   onClose: () => void;
 }) {
@@ -249,6 +258,20 @@ function RolePopover({
         </div>
         <button onClick={onClose} className="text-gray-500 hover:text-white text-xl leading-none transition-colors">×</button>
       </div>
+
+      {slot.player && (
+        <>
+          <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Shirt</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={slot.player.shirtNumber === undefined ? '' : String(slot.player.shirtNumber)}
+            onChange={e => onShirtChange(parseShirtNumber(e.target.value))}
+            placeholder="none · 0–999"
+            className="w-full bg-gray-800 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 mb-3"
+          />
+        </>
+      )}
 
       {/* Role picker */}
       <label className="block text-xs text-gray-400 mb-1 uppercase tracking-wide">Role</label>
@@ -305,8 +328,8 @@ function SquadCard({
       }`}
     >
       {/* Number or position */}
-      <div className="w-7 h-7 rounded-full bg-gray-700/80 border border-gray-600 flex items-center justify-center text-xs font-bold shrink-0 text-white">
-        {player.shirtNumber ?? '—'}
+      <div className="w-7 h-7 rounded-full bg-gray-700/80 border border-gray-600 flex items-center justify-center text-[11px] font-bold shrink-0 text-white">
+        {shirtLabel(player.shirtNumber)}
       </div>
       <span className="flex-1 text-sm font-medium truncate text-white">{player.name}</span>
       <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md shrink-0 text-white ${badge}`}>{pos}</span>
@@ -329,14 +352,12 @@ export function FormationEditor() {
   const [saveName, setSaveName] = useState('4-3-3');
   const [saving, setSaving] = useState(false);
   const [showSavedDropdown, setShowSavedDropdown] = useState(false);
+  const [persistError, setPersistError] = useState('');
 
   // Squad search
   const [searchQuery, setSearchQuery] = useState('');
-  const [teamResults, setTeamResults] = useState<ApiTeam[]>([]);
-  const [searching, setSearching] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState<ApiTeam | null>(null);
   const [squad, setSquad] = useState<SquadPlayer[]>([]);
-  const [loadingSquad, setLoadingSquad] = useState(false);
   const [squadError, setSquadError] = useState('');
 
   // Interaction
@@ -347,13 +368,14 @@ export function FormationEditor() {
 
   const pitchRef = useRef<HTMLDivElement>(null);
   const savedDropdownRef = useRef<HTMLDivElement>(null);
+  const dragPayloadRef = useRef<{ player: AssignedPlayer; from: 'squad' | 'bench' } | null>(null);
+  const nextCustomId = useRef(100001);
+  const [customPosition, setCustomPosition] = useState('Midfielder');
+  const [customNumber, setCustomNumber] = useState('');
 
   // ── Load saved formations ──
   useEffect(() => {
-    fetch('/api/formations')
-      .then(r => r.json())
-      .then(setSavedFormations)
-      .catch(console.error);
+    setSavedFormations(listFormations() as SavedFormation[]);
   }, []);
 
   // Close saved dropdown on outside click
@@ -401,29 +423,32 @@ export function FormationEditor() {
   const handleSave = async () => {
     if (!saveName.trim()) return;
     setSaving(true);
+    setPersistError('');
     try {
       const body = { name: saveName, shape, positions: slots, substitutes: subs, teamName: teamName || undefined };
       if (loadedId) {
-        const res = await fetch(`/api/formations/${loadedId}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        const updated = await res.json();
-        setSavedFormations(prev => prev.map(f => f._id === loadedId ? updated : f));
+        const updated = updateFormation(loadedId, body);
+        if (!updated) {
+          setPersistError('Formation not found.');
+          return;
+        }
+        setSavedFormations(prev => prev.map(f => f._id === loadedId ? updated as SavedFormation : f));
       } else {
-        const res = await fetch('/api/formations', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-        const created = await res.json();
+        const created = createFormation(body) as SavedFormation;
         setSavedFormations(prev => [created, ...prev]);
         setLoadedId(created._id);
       }
+    } catch {
+      setPersistError('Save failed.');
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleNew = () => {
+    setLoadedId(null);
+    setSaveName(shape);
+    setPersistError('');
   };
 
   const loadSaved = (f: SavedFormation) => {
@@ -440,43 +465,37 @@ export function FormationEditor() {
   const deleteSaved = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!confirm('Delete this formation?')) return;
-    await fetch(`/api/formations/${id}`, { method: 'DELETE' });
+    deleteFormation(id);
     setSavedFormations(prev => prev.filter(f => f._id !== id));
     if (loadedId === id) { setLoadedId(null); setSaveName(''); }
   };
 
   // ── Squad search ──
-  const searchTeams = async () => {
-    if (!searchQuery.trim()) return;
-    setSearching(true);
-    setTeamResults([]);
-    try {
-      const r = await fetch(`/api/search/teams?name=${encodeURIComponent(searchQuery)}`);
-      const data = await r.json();
-      if (data.error) { setSquadError(data.error); }
-      else setTeamResults(Array.isArray(data) ? data : []);
-    } catch { setSquadError('Search failed.'); }
-    finally { setSearching(false); }
-  };
-
-  const loadSquad = async (team: ApiTeam) => {
-    setSelectedTeam(team);
-    setTeamResults([]);
-    setSearchQuery('');
-    setSquad([]);
+  const addCustomPlayer = () => {
+    const name = searchQuery.trim();
+    if (!name) return;
     setSquadError('');
-    setLoadingSquad(true);
-    setTeamName(team.name);
-    setSaveName(prev => prev === shape || prev === '' ? team.name : prev);
-    try {
-      const r = await fetch(`/api/search/squad?teamId=${team.id}`);
-      const data = await r.json();
-      if (data.error) setSquadError(data.error);
-      else setSquad(Array.isArray(data) ? data : []);
-    } catch { setSquadError('Failed to load squad.'); }
-    finally { setLoadingSquad(false); }
+    const shirt = parseShirtNumber(customNumber);
+    const player: SquadPlayer = {
+      id: nextCustomId.current++,
+      name,
+      shirtNumber: shirt,
+      position: customPosition,
+      photo: '',
+    };
+    setSquad(prev => [...prev, player]);
+    setSelectedPlayer(player);
+    setSearchQuery('');
+    setCustomNumber('');
   };
 
+  const loadDemoSquad = () => {
+    setSquadError('');
+    setSquad(DEMO_SQUAD.map(p => ({ ...p })));
+    setSelectedTeam(DEMO_TEAM);
+    setTeamName(DEMO_TEAM.name);
+    setSaveName(prev => prev === shape || prev === '' ? DEMO_TEAM.name : prev);
+  };
   // ── Computed ──
   const assignedIds = new Set<number>([
     ...slots.filter(s => s.player).map(s => s.player!.apiId),
@@ -492,7 +511,11 @@ export function FormationEditor() {
       const displaced = next[slotIdx].player;
       next[slotIdx] = { ...next[slotIdx], player };
       if (displaced) {
-        setSubs(s => s.some(x => x.apiId === displaced.apiId) ? s : [...s, displaced]);
+        setSubs(s => {
+          if (s.some(x => x.apiId === displaced.apiId)) return s;
+          if (s.length >= 9) return s;
+          return [...s, displaced];
+        });
       }
       return next;
     });
@@ -517,7 +540,13 @@ export function FormationEditor() {
     setSlots(prev => {
       const next = [...prev];
       const p = next[idx].player;
-      if (p) setSubs(s => s.some(x => x.apiId === p.apiId) ? s : [...s, p]);
+      if (p) {
+        setSubs(s => {
+          if (s.some(x => x.apiId === p.apiId)) return s;
+          if (s.length >= 9) return s;
+          return [...s, p];
+        });
+      }
       next[idx] = { ...next[idx], player: undefined };
       return next;
     });
@@ -527,18 +556,28 @@ export function FormationEditor() {
   // ── Bench: add from available ──
   const addToBench = (player: SquadPlayer) => {
     const ap: AssignedPlayer = { apiId: player.id, name: player.name, shirtNumber: player.shirtNumber, apiPosition: player.position };
-    setSubs(s => s.some(x => x.apiId === ap.apiId) ? s : [...s, ap]);
+    setSubs(s => {
+      if (s.some(x => x.apiId === ap.apiId)) return s;
+      if (s.length >= 9) return s;
+      return [...s, ap];
+    });
     setSelectedPlayer(null);
   };
 
   // ── HTML5 Drag & Drop ──
   const onSquadDragStart = (e: React.DragEvent, p: SquadPlayer) => {
-    setDragPayload({ player: { apiId: p.id, name: p.name, shirtNumber: p.shirtNumber, apiPosition: p.position }, from: 'squad' });
+    const payload = { player: { apiId: p.id, name: p.name, shirtNumber: p.shirtNumber, apiPosition: p.position }, from: 'squad' as const };
+    dragPayloadRef.current = payload;
+    setDragPayload(payload);
+    e.dataTransfer.setData('text/plain', String(p.id));
     e.dataTransfer.effectAllowed = 'move';
   };
 
   const onBenchDragStart = (e: React.DragEvent, p: AssignedPlayer) => {
-    setDragPayload({ player: p, from: 'bench' });
+    const payload = { player: p, from: 'bench' as const };
+    dragPayloadRef.current = payload;
+    setDragPayload(payload);
+    e.dataTransfer.setData('text/plain', String(p.apiId));
     e.dataTransfer.effectAllowed = 'move';
   };
 
@@ -546,14 +585,18 @@ export function FormationEditor() {
 
   const onSlotDrop = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
-    if (dragPayload) assignToSlot(dragPayload.player, idx, dragPayload.from);
+    const payload = dragPayloadRef.current ?? dragPayload;
+    if (payload) assignToSlot(payload.player, idx, payload.from);
+    dragPayloadRef.current = null;
     setDragPayload(null);
   };
 
   const onBenchDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    if (!dragPayload) return;
-    if (dragPayload.from === 'squad') addToBench({ id: dragPayload.player.apiId, name: dragPayload.player.name, shirtNumber: dragPayload.player.shirtNumber, position: dragPayload.player.apiPosition, photo: '' });
+    const payload = dragPayloadRef.current ?? dragPayload;
+    if (!payload) return;
+    if (payload.from === 'squad') addToBench({ id: payload.player.apiId, name: payload.player.name, shirtNumber: payload.player.shirtNumber, position: payload.player.apiPosition, photo: '' });
+    dragPayloadRef.current = null;
     setDragPayload(null);
   };
 
@@ -642,6 +685,14 @@ export function FormationEditor() {
           >
             {saving ? 'Saving…' : loadedId ? 'Update' : 'Save'}
           </button>
+          {loadedId && (
+            <button
+              onClick={handleNew}
+              className="px-3 py-1.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-gray-300 transition-colors"
+            >
+              New
+            </button>
+          )}
 
           {/* Saved dropdown */}
           <div className="relative" ref={savedDropdownRef}>
@@ -687,7 +738,11 @@ export function FormationEditor() {
         </div>
       </div>
 
-      {/* ── Main two-column layout ──────────────────────────────────────────── */}
+      {persistError && (
+        <p className="mb-3 text-sm text-red-300 bg-red-900/30 border border-red-800/50 rounded-lg px-3 py-2">
+          {persistError}
+        </p>
+      )}
       <div className="flex gap-4 flex-1 min-h-0">
 
         {/* ── LEFT: Pitch + Bench ──────────────────────────────────────────── */}
@@ -734,7 +789,7 @@ export function FormationEditor() {
                   `}>
                     {/* Shirt number badge */}
                     {slot.player?.shirtNumber !== undefined && (
-                      <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-gray-900/90 border border-gray-600 flex items-center justify-center text-[9px] font-bold text-white leading-none">
+                      <div className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-0.5 rounded-full bg-gray-900/90 border border-gray-600 flex items-center justify-center text-[9px] font-bold text-white leading-none">
                         {slot.player.shirtNumber}
                       </div>
                     )}
@@ -763,6 +818,9 @@ export function FormationEditor() {
                     <RolePopover
                       slot={slot}
                       onRoleChange={r => setSlots(prev => prev.map((s, i) => i === idx ? { ...s, role: r || undefined } : s))}
+                      onShirtChange={n => setSlots(prev => prev.map((s, i) => (
+                        i === idx && s.player ? { ...s, player: { ...s.player, shirtNumber: n } } : s
+                      )))}
                       onRemove={() => removeFromSlot(idx)}
                       onClose={() => setOpenPopover(null)}
                     />
@@ -808,7 +866,7 @@ export function FormationEditor() {
                       className="flex items-center gap-1.5 bg-gray-700/80 border border-gray-600/60 rounded-lg px-2.5 py-1.5 text-sm group cursor-grab"
                     >
                       {p.shirtNumber !== undefined && (
-                        <span className="w-5 h-5 rounded-full bg-gray-600 flex items-center justify-center text-[10px] font-bold shrink-0">
+                        <span className="min-w-5 h-5 px-0.5 rounded-full bg-gray-600 flex items-center justify-center text-[10px] font-bold shrink-0">
                           {p.shirtNumber}
                         </span>
                       )}
@@ -836,39 +894,49 @@ export function FormationEditor() {
                 type="text"
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && searchTeams()}
-                placeholder="Search a team…"
+                onKeyDown={e => e.key === 'Enter' && addCustomPlayer()}
+                placeholder="Player name"
                 className="flex-1 bg-gray-700/80 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
               />
               <button
-                onClick={searchTeams}
-                disabled={searching || !searchQuery.trim()}
+                onClick={addCustomPlayer}
+                disabled={!searchQuery.trim()}
                 className="px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 rounded-lg text-sm font-semibold transition-colors"
               >
-                {searching ? '…' : 'Find'}
+                Add
               </button>
             </div>
+            <div className="flex gap-2 mb-2">
+              <select
+                value={customPosition}
+                onChange={e => setCustomPosition(e.target.value)}
+                className="flex-1 bg-gray-700/80 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="Goalkeeper">GK</option>
+                <option value="Defender">DEF</option>
+                <option value="Midfielder">MID</option>
+                <option value="Attacker">FWD</option>
+              </select>
+              <label className="sr-only" htmlFor="shirt-number">Shirt number</label>
+              <input
+                id="shirt-number"
+                type="text"
+                inputMode="numeric"
+                value={customNumber}
+                onChange={e => setCustomNumber(e.target.value.replace(/[^\d]/g, '').slice(0, 3))}
+                placeholder="Shirt"
+                title="Shirt number. Usually 1–99. 0 and other values up to 999 are allowed."
+                className="w-16 bg-gray-700/80 border border-gray-600 rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={loadDemoSquad}
+              className="w-full text-xs py-1.5 rounded-lg bg-gray-700/80 hover:bg-gray-700 text-gray-300 transition-colors"
+            >
+              Load demo squad
+            </button>
 
-            {/* Team results */}
-            {teamResults.length > 0 && (
-              <div className="space-y-1 max-h-52 overflow-y-auto">
-                {teamResults.map(t => (
-                  <button
-                    key={t.id}
-                    onClick={() => loadSquad(t)}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 bg-gray-700/60 hover:bg-gray-700 rounded-lg text-sm text-left transition-colors"
-                  >
-                    {t.logo && <img src={t.logo} alt="" className="w-6 h-6 object-contain shrink-0" />}
-                    <div className="min-w-0">
-                      <div className="font-medium text-white truncate">{t.name}</div>
-                      <div className="text-xs text-gray-400">{t.country}</div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Error */}
             {squadError && (
               <p className="mt-2 text-xs text-red-400 bg-red-900/20 border border-red-800/40 rounded-lg px-3 py-2">
                 {squadError}
@@ -885,15 +953,11 @@ export function FormationEditor() {
               )}
             </div>
 
-            {loadingSquad ? (
-              <div className="flex-1 flex items-center justify-center">
-                <div className="text-sm text-gray-400 animate-pulse">Loading squad…</div>
-              </div>
-            ) : squad.length === 0 ? (
+            {squad.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center text-center px-4 py-8 gap-2">
                 <div className="text-3xl opacity-30">👕</div>
-                <p className="text-sm text-gray-500">Search for a club above to load their squad.</p>
-                <p className="text-xs text-gray-600">Then drag or click players onto the pitch.</p>
+                <p className="text-sm text-gray-500">Type a name and Add, or load the demo squad.</p>
+                <p className="text-xs text-gray-600">Then click a player and click a pitch slot.</p>
               </div>
             ) : availablePlayers.length === 0 ? (
               <div className="flex-1 flex items-center justify-center">
